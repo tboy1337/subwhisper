@@ -6,9 +6,44 @@ A powerful tool that uses OpenAI's Whisper speech-to-text model to automatically
 
 1. Python 3.7 or later
 2. FFmpeg installed on your system
-   - Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH
-   - macOS: `brew install ffmpeg`
-   - Linux: `sudo apt install ffmpeg` or equivalent for your distribution
+
+### Installing FFmpeg
+
+FFmpeg can be installed using various package managers or directly from its website:
+
+#### Windows
+- Download the latest static build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/).
+- Extract the files and add the `bin` folder to your system's PATH.
+- Use a package manager:
+  - **Winget**:
+    ```batch
+    winget install ffmpeg
+    ```
+  - **Chocolatey**:
+    ```batch
+    choco install ffmpeg-full
+    ```
+
+#### macOS
+- Use Homebrew:
+  ```bash
+  brew install ffmpeg
+  ```
+
+#### Linux
+- Use your distribution's package manager:
+  - Ubuntu/Debian:
+    ```bash
+    sudo apt update && sudo apt install ffmpeg
+    ```
+  - Fedora:
+    ```bash
+    sudo dnf install ffmpeg
+    ```
+  - Arch:
+    ```bash
+    sudo pacman -S ffmpeg
+    ```
 
 ## Installation
 
