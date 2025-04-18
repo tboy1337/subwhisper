@@ -276,11 +276,28 @@ def main():
     parser.add_argument("--output", default=None, help="Output SRT file path or directory (for batch processing)")
     parser.add_argument("--max-segment-length", type=int, default=None, help="Maximum character length for subtitle segments")
     
-    # Post-processing options
-    parser.add_argument("--post-process", default=None, help="Command to run on generated subtitle file (use INPUT_FILE as placeholder)")
+    # Post-processing options group
+    post_group = parser.add_argument_group('Post-processing options')
+    post_group.add_argument("--post-process", default=None, help="Command to run on generated subtitle file (use INPUT_FILE as placeholder)")
+    
+    # Subtitle Edit CLI preset options
+    se_group = parser.add_argument_group('Subtitle Edit presets (Docker required)')
+    se_group.add_argument("--fix-common-errors", action="store_true", help="Apply common error fixes to the generated subtitles")
+    se_group.add_argument("--remove-hi", action="store_true", help="Remove text for hearing impaired")
+    se_group.add_argument("--auto-split-long-lines", action="store_true", help="Automatically split long lines")
+    se_group.add_argument("--fix-punctuation", action="store_true", help="Fix punctuation issues")
+    se_group.add_argument("--ocr-fix", action="store_true", help="Apply OCR fixes (common OCR errors)")
+    se_group.add_argument("--convert-to", choices=["srt", "ass", "stl", "smi", "vtt"], help="Convert subtitle to specified format")
     
     # Parse args
     args = parser.parse_args()
+    
+    # Generate Docker post-processing command based on presets
+    docker_cmd = generate_docker_post_process_cmd(args)
+    if docker_cmd:
+        if args.post_process:
+            print("Warning: Both custom post-process command and presets specified. Using presets.")
+        args.post_process = docker_cmd
     
     try:
         # Print banner
@@ -332,7 +349,8 @@ def main():
             # Process single video
             process_video(args.video_path, args)
             print("\nSubWhisper: Processing complete!")
-            print("You can now open the SRT file in Subtitle Edit for any additional formatting or timing adjustments.")
+            if not args.post_process:
+                print("You can now open the SRT file in Subtitle Edit for any additional formatting or timing adjustments.")
         
     except KeyboardInterrupt:
         print("\nSubWhisper: Operation cancelled by user")
@@ -341,6 +359,33 @@ def main():
     finally:
         # Clean up temporary files
         cleanup_and_exit()
+
+def generate_docker_post_process_cmd(args):
+    """Generate Docker post-processing command based on preset arguments"""
+    if not (args.fix_common_errors or args.remove_hi or args.auto_split_long_lines or 
+            args.fix_punctuation or args.ocr_fix or args.convert_to):
+        return None
+    
+    # Start building Docker command
+    docker_cmd = 'docker run --rm -v "$(pwd)":/subtitles seconv:1.0 /subtitles/INPUT_FILE_BASENAME'
+    
+    # Set output format (default is subrip/srt)
+    output_format = args.convert_to if args.convert_to else "subrip"
+    docker_cmd += f" {output_format}"
+    
+    # Add operations
+    if args.fix_common_errors:
+        docker_cmd += " /fixcommonerrors"
+    if args.remove_hi:
+        docker_cmd += " /removetextforhi"
+    if args.auto_split_long_lines:
+        docker_cmd += " /splitlonglines"
+    if args.fix_punctuation:
+        docker_cmd += " /fixpunctuation"
+    if args.ocr_fix:
+        docker_cmd += " /ocrfix"
+    
+    return docker_cmd
 
 if __name__ == "__main__":
     main() 

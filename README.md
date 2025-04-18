@@ -121,11 +121,45 @@ The script generates standard SRT subtitle files, which you can then open and ed
 
 ## Automated Post-Processing
 
-SubWhisper can also automatically post-process subtitles using command-line tools:
+SubWhisper can automatically post-process subtitles to improve quality and formatting:
+
+### Using Simple Preset Options
+
+For common subtitle editing tasks, you can use these simple command-line options instead of writing complex Docker commands:
+
+```bash
+# Fix common errors in subtitles
+python subwhisper.py video.mp4 --fix-common-errors
+
+# Remove text for hearing impaired
+python subwhisper.py video.mp4 --remove-hi
+
+# Both fix common errors and remove hearing impaired text
+python subwhisper.py video.mp4 --fix-common-errors --remove-hi
+
+# Convert to ASS/SSA format with fixed punctuation
+python subwhisper.py video.mp4 --convert-to ass --fix-punctuation
+
+# Apply multiple fixes at once
+python subwhisper.py video.mp4 --fix-common-errors --remove-hi --auto-split-long-lines --ocr-fix
+```
+
+These presets automatically generate the appropriate Docker commands for Subtitle Edit CLI.
+
+### Available Preset Options:
+
+- `--fix-common-errors`: Apply common error fixes to subtitles
+- `--remove-hi`: Remove text for hearing impaired
+- `--auto-split-long-lines`: Split long subtitle lines 
+- `--fix-punctuation`: Fix punctuation issues
+- `--ocr-fix`: Apply OCR fixes for common OCR errors
+- `--convert-to`: Convert to specified format (choices: srt, ass, stl, smi, vtt)
+
+Note: These presets require Docker and the Subtitle Edit CLI image to be built first (see below).
 
 ### Using Subtitle Edit CLI with Docker
 
-The recommended way to use Subtitle Edit CLI is through Docker, which works on all platforms (Windows, macOS, Linux):
+If you need more advanced options, you can use Subtitle Edit CLI directly through Docker:
 
 1. First, build the Docker image (requires Docker installed):
 ```bash
