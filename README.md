@@ -91,7 +91,9 @@ python subwhisper.py videos_folder --batch --extensions "mp4,mkv,avi"
 
 ## Subtitle Post-Processing
 
-SubWhisper can automatically improve generated subtitles using preset options:
+SubWhisper can automatically improve generated subtitles using preset options.
+
+> **⚠️ IMPORTANT:** All subtitle post-processing features below require Docker and the Subtitle Edit CLI image. See the "Advanced Usage with Subtitle Edit" section below for setup instructions **before** using these options.
 
 ```bash
 # Fix common errors
@@ -104,7 +106,7 @@ python subwhisper.py video.mp4 --remove-hi
 python subwhisper.py video.mp4 --fix-common-errors --remove-hi --auto-split-long-lines
 ```
 
-Available presets:
+Available presets (all require Docker + Subtitle Edit CLI):
 - `--fix-common-errors`: Fix common subtitle issues
 - `--remove-hi`: Remove hearing impaired text
 - `--auto-split-long-lines`: Split long subtitle lines
@@ -114,19 +116,35 @@ Available presets:
 
 ## Advanced Usage with Subtitle Edit
 
-For more advanced subtitle editing, you can use Subtitle Edit CLI through Docker:
+### Docker Setup (Required for Post-Processing)
 
-1. Build the Docker image:
+All subtitle post-processing options require Docker and the Subtitle Edit CLI image:
+
+1. Install Docker from [docker.com](https://www.docker.com/products/docker-desktop/)
+
+2. Build the Subtitle Edit CLI Docker image:
    ```bash
    git clone https://github.com/SubtitleEdit/subtitleedit-cli.git
    cd subtitleedit-cli
    docker build -t seconv:1.0 -f docker/Dockerfile .
    ```
 
-2. Use with SubWhisper:
+3. Verify the image is built correctly:
    ```bash
-   python subwhisper.py video.mp4 --post-process "docker run --rm -v \"$(pwd)\":/subtitles seconv:1.0 /subtitles/INPUT_FILE_BASENAME subrip /fixcommonerrors"
+   docker images | grep seconv
    ```
+
+Once the Docker image is built, you can use SubWhisper's post-processing features.
+
+### Custom Post-Processing Commands
+
+The built-in flags (like `--fix-common-errors`) are convenience wrappers that generate Docker commands automatically. If you need more control, you can use the `--post-process` flag directly:
+
+```bash
+python subwhisper.py video.mp4 --post-process "docker run --rm -v \"$(pwd)\":/subtitles seconv:1.0 /subtitles/INPUT_FILE_BASENAME subrip /fixcommonerrors"
+```
+
+Most users should prefer the built-in flags over custom post-processing commands.
 
 ## Performance Tips
 
