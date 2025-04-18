@@ -157,7 +157,14 @@ def process_video(video_path, args):
         # Apply post-processing if specified
         if args.post_process:
             print(f"SubWhisper: Applying post-processing to subtitle file...")
-            process_command = args.post_process.replace("INPUT_FILE", str(output_path))
+            
+            # Replace placeholders in the command
+            process_command = args.post_process
+            process_command = process_command.replace("INPUT_FILE", str(output_path))
+            
+            # Add support for basename placeholder (for Docker)
+            basename = output_path.name
+            process_command = process_command.replace("INPUT_FILE_BASENAME", basename)
             
             try:
                 result = subprocess.run(process_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

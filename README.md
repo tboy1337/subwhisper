@@ -123,21 +123,39 @@ The script generates standard SRT subtitle files, which you can then open and ed
 
 SubWhisper can also automatically post-process subtitles using command-line tools:
 
-### Using Subtitle Edit CLI
+### Using Subtitle Edit CLI with Docker
 
-You can automatically post-process subtitles with Subtitle Edit CLI for tasks like fixing common errors, removing hearing-impaired text, or adjusting timing.
+The recommended way to use Subtitle Edit CLI is through Docker, which works on all platforms (Windows, macOS, Linux):
 
+1. First, build the Docker image (requires Docker installed):
 ```bash
-# Install Subtitle Edit CLI
-# Windows: Download from https://github.com/SubtitleEdit/subtitleedit-cli
-# Linux/macOS: Use the Docker version
+# Clone the repository
+git clone https://github.com/SubtitleEdit/subtitleedit-cli.git
+cd subtitleedit-cli
 
-# Example: Fix common errors and clean up subtitles
-python subwhisper.py video.mp4 --post-process "seconv INPUT_FILE subrip /fixcommonerrors"
-
-# Example: Remove text for hearing impaired
-python subwhisper.py video.mp4 --post-process "seconv INPUT_FILE subrip /removetextforhi"
+# Build the Docker image
+docker build -t seconv:1.0 -f docker/Dockerfile .
 ```
+
+2. Create a directory for your subtitles (if you don't already have one):
+```bash
+mkdir subtitles
+```
+
+3. Set up SubWhisper post-processing to use the Docker container:
+```bash
+# Process a video and apply subtitle editing through Docker
+python subwhisper.py video.mp4 --post-process "docker run --rm -v \"$(pwd)\":/subtitles seconv:1.0 /subtitles/INPUT_FILE_BASENAME subrip /fixcommonerrors"
+
+# Remove text for hearing impaired
+python subwhisper.py video.mp4 --post-process "docker run --rm -v \"$(pwd)\":/subtitles seconv:1.0 /subtitles/INPUT_FILE_BASENAME subrip /removetextforhi"
+```
+
+The script will automatically replace:
+- `INPUT_FILE` with the full path to the subtitle file
+- `INPUT_FILE_BASENAME` with just the filename
+
+Note: On Windows, you may need to adjust the volume mounting syntax.
 
 ### Using Other CLI Tools
 
