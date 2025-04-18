@@ -6,11 +6,44 @@ Automatically generate subtitles for videos using OpenAI's Whisper speech-to-tex
 
 1. **Prerequisites**: 
    - Python 3.7+
-   - FFmpeg installed ([Windows](https://www.gyan.dev/ffmpeg/builds/), [Mac](https://brew.sh/): `brew install ffmpeg`, [Linux](https://ffmpeg.org/download.html): `apt/dnf/pacman install ffmpeg`)
+   - FFmpeg installed
+
+### Installing FFmpeg
+
+FFmpeg can be installed using various package managers or directly from its website:
+
+#### Windows
+- Download the latest static build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/).
+- Use a package manager:
+  - **Winget**:
+    ```batch
+    winget install ffmpeg
+    ```
+  - **Chocolatey**:
+    ```batch
+    choco install ffmpeg-full
+    ```
+
+#### macOS
+- Use Homebrew:
+  ```bash
+  brew install ffmpeg
+  ```
+
+#### Linux
+- Use your distribution's package manager:
+  - Ubuntu/Debian:
+    ```bash
+    sudo apt update && sudo apt install ffmpeg
+    ```
+  - Fedora:
+    ```bash
+    sudo dnf install ffmpeg
+    ```
 
 2. **Install**:
    ```bash
-   git clone https://github.com/yourusername/subwhisper.git
+   git clone https://github.com/tboy1337/subwhisper.git
    cd subwhisper
    pip install -r requirements.txt
    ```
