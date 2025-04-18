@@ -154,6 +154,24 @@ def process_video(video_path, args):
         # Generate SRT file
         generate_srt(result["segments"], str(output_path), args.max_segment_length)
         
+        # Apply post-processing if specified
+        if args.post_process:
+            print(f"SubWhisper: Applying post-processing to subtitle file...")
+            process_command = args.post_process.replace("INPUT_FILE", str(output_path))
+            
+            try:
+                result = subprocess.run(process_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                
+                if result.returncode != 0:
+                    error_msg = result.stderr.strip()
+                    print(f"Warning: Post-processing failed: {error_msg}")
+                else:
+                    print(f"SubWhisper: Post-processing completed successfully")
+                    if result.stdout.strip():
+                        print(result.stdout.strip())
+            except Exception as e:
+                print(f"Warning: Error during post-processing: {str(e)}")
+        
         return True
     
     except Exception as e:
@@ -250,6 +268,9 @@ def main():
     # Output options
     parser.add_argument("--output", default=None, help="Output SRT file path or directory (for batch processing)")
     parser.add_argument("--max-segment-length", type=int, default=None, help="Maximum character length for subtitle segments")
+    
+    # Post-processing options
+    parser.add_argument("--post-process", default=None, help="Command to run on generated subtitle file (use INPUT_FILE as placeholder)")
     
     # Parse args
     args = parser.parse_args()

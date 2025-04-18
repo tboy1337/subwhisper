@@ -119,6 +119,40 @@ The script generates standard SRT subtitle files, which you can then open and ed
 - Styling or formatting the subtitles
 - Translating to other languages
 
+## Automated Post-Processing
+
+SubWhisper can also automatically post-process subtitles using command-line tools:
+
+### Using Subtitle Edit CLI
+
+You can automatically post-process subtitles with Subtitle Edit CLI for tasks like fixing common errors, removing hearing-impaired text, or adjusting timing.
+
+```bash
+# Install Subtitle Edit CLI
+# Windows: Download from https://github.com/SubtitleEdit/subtitleedit-cli
+# Linux/macOS: Use the Docker version
+
+# Example: Fix common errors and clean up subtitles
+python subwhisper.py video.mp4 --post-process "seconv INPUT_FILE subrip /fixcommonerrors"
+
+# Example: Remove text for hearing impaired
+python subwhisper.py video.mp4 --post-process "seconv INPUT_FILE subrip /removetextforhi"
+```
+
+### Using Other CLI Tools
+
+SubWhisper supports using any command-line subtitle processor by passing the appropriate command:
+
+```bash
+# Using subedit (a BASH-based subtitle editor)
+python subwhisper.py video.mp4 --post-process "subedit -i INPUT_FILE -c -k '()' -m"
+
+# Custom command (replace INPUT_FILE with your subtitle path)
+python subwhisper.py video.mp4 --post-process "your-subtitle-tool --input INPUT_FILE --output INPUT_FILE --option1 value1"
+```
+
+The placeholder `INPUT_FILE` will be automatically replaced with the path to the generated subtitle file.
+
 ## Performance Notes
 
 - The first run will download the selected Whisper model, which may take some time
