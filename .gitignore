@@ -1,0 +1,48 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env/
+.venv/
+
+# IDE settings
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter notebooks
+.ipynb_checkpoints
+
+# Project-specific files
+*.srt
+*.wav
+*.mp3
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+
+# Temporary directories
+temp/
+tmp/
+
+# Local configuration
+.DS_Store
+Thumbs.db 
