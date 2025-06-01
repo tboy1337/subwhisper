@@ -16,6 +16,47 @@ from tqdm import tqdm
 # Create a temp directory for extracted audio
 TEMP_DIR = None
 
+# Try to find ffmpeg in common locations if not in PATH
+def find_ffmpeg():
+    """Find FFmpeg executable in the system"""
+    # Common locations for FFmpeg
+    ffmpeg_locations = [
+        # Windows Program Files and common installation locations
+        r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+        r"C:\ffmpeg\bin\ffmpeg.exe",
+        r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
+        # Winget installation location
+        os.path.expanduser(r"~\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"),
+        # Default command (if in PATH)
+        "ffmpeg"
+    ]
+    
+    # Check if ffmpeg is in PATH first
+    try:
+        # Use appropriate command based on OS
+        if sys.platform == "win32":
+            check_cmd = ["where", "ffmpeg"]
+        else:
+            check_cmd = ["which", "ffmpeg"]
+            
+        result = subprocess.run(check_cmd, 
+                               stdout=subprocess.PIPE, 
+                               stderr=subprocess.PIPE, 
+                               text=True,
+                               check=False)
+        if result.returncode == 0:
+            return result.stdout.strip().split('\n')[0]
+    except Exception:
+        pass
+    
+    # Check common locations
+    for location in ffmpeg_locations:
+        if os.path.isfile(location):
+            return location
+    
+    # If we get here, we couldn't find ffmpeg
+    return None
+
 def format_timestamp(seconds):
     """Convert seconds to SRT format timestamp (HH:MM:SS,mmm)"""
     td = timedelta(seconds=seconds)
@@ -38,8 +79,14 @@ def extract_audio(video_path, output_path=None):
         output_path = os.path.join(TEMP_DIR, f"{basename_no_ext}.wav")
     
     try:
+        # Find ffmpeg executable
+        ffmpeg_path = find_ffmpeg()
+        if ffmpeg_path is None:
+            print("Error: FFmpeg not found. Please make sure FFmpeg is installed and in your PATH.")
+            cleanup_and_exit(1)
+            
         command = [
-            "ffmpeg", "-i", video_path, 
+            ffmpeg_path, "-i", video_path, 
             "-vn", "-acodec", "pcm_s16le", 
             "-ar", "16000", "-ac", "1", 
             output_path, "-y"
@@ -197,6 +244,7 @@ def transcribe_audio(audio_path, args):
         # Setup transcription options
         transcribe_options = {
             "verbose": False,  # We'll handle our own progress reporting
+            "fp16": False      # Disable fp16 which can cause issues on CPU
         }
         
         if args.language:
@@ -225,9 +273,38 @@ def transcribe_audio(audio_path, args):
                 # Break if more than a short time has passed (whisper will start processing)
                 if time.time() - start_time > 2:
                     break
-        
-            # Perform the transcription
-            result = model.transcribe(audio_path, **transcribe_options)
+            
+            # Try to load audio with numpy directly
+            try:
+                import numpy as np
+                import scipy.io.wavfile as wav
+                
+                print("\rSubWhisper: Loading audio with scipy...")
+                sample_rate, audio_data = wav.read(audio_path)
+                
+                # Convert to float32 and normalize
+                if audio_data.dtype == np.int16:
+                    audio_data = audio_data.astype(np.float32) / 32768.0
+                elif audio_data.dtype == np.int32:
+                    audio_data = audio_data.astype(np.float32) / 2147483648.0
+                
+                # Convert to mono if stereo
+                if audio_data.ndim > 1:
+                    audio_data = np.mean(audio_data, axis=1)
+                
+                # Resample to 16kHz if needed
+                if sample_rate != 16000:
+                    print("\rSubWhisper: Resampling audio to 16kHz...")
+                    from scipy import signal
+                    audio_data = signal.resample(audio_data, int(len(audio_data) * 16000 / sample_rate))
+                
+                # Perform transcription with the loaded audio
+                result = model.transcribe(audio_data, **transcribe_options)
+            except Exception as audio_error:
+                print(f"\rSubWhisper: Error loading audio with scipy: {str(audio_error)}. Trying with whisper...")
+                
+                # Fall back to whisper's default loading
+                result = model.transcribe(audio_path, **transcribe_options)
             
             # Clear the progress indicator
             sys.stdout.write("\r" + " " * 40 + "\r")

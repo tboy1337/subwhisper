@@ -1,4 +1,6 @@
 openai-whisper
 torch
 ffmpeg-python
-tqdm 
+tqdm
+scipy
+numpy 
