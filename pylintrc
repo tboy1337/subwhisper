@@ -1,0 +1,65 @@
+[MASTER]
+py-version=3.8
+jobs=0
+suggestion-mode=yes
+persistent=yes
+load-plugins=
+
+[MESSAGES CONTROL]
+# Disable specific warnings that are not applicable or too strict for this project
+disable=
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    broad-except,
+    import-error,
+    no-member
+
+[REPORTS]
+# Set the output format for reports
+output-format=text
+reports=no
+score=yes
+
+[REFACTORING]
+max-nested-blocks=5
+never-returning-functions=sys.exit
+
+[BASIC]
+argument-naming-style=snake_case
+attr-naming-style=snake_case
+class-attribute-naming-style=any
+class-naming-style=PascalCase
+const-naming-style=UPPER_CASE
+function-naming-style=snake_case
+method-naming-style=snake_case
+module-naming-style=snake_case
+variable-naming-style=snake_case
+
+[FORMAT]
+max-line-length=88
+indent-string='    '
+expected-line-ending-format=LF
+
+[LOGGING]
+logging-format-style=new
+
+[SIMILARITIES]
+min-similarity-lines=4
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=no
+
+[DESIGN]
+max-args=7
+max-attributes=7
+max-bool-expr=5
+max-branches=12
+max-locals=15
+max-parents=7
+max-public-methods=20
+max-returns=6
+max-statements=50
+min-public-methods=2
