@@ -40,7 +40,16 @@ def temp_dir() -> Generator[Path, None, None]:
 @pytest.fixture(scope="session")
 def sample_video_file(temp_dir: Path) -> Path:
     """Create or find a sample video file for testing."""
-    # Look for test video in the tests directory
+    # Look for actual test video in the test_files directory
+    test_video = (
+        Path(__file__).parent
+        / "test_files"
+        / "UFO_Takes_Direct_Hit_From_Hellfire_Missile_(Yemen_2024).mp4"
+    )
+    if test_video.exists():
+        return test_video
+
+    # Fallback: Look for test video in the tests directory
     test_video = Path(__file__).parent / "test.mp4"
     if test_video.exists():
         return test_video
@@ -94,13 +103,10 @@ def sample_audio_data(temp_dir: Path) -> Path:
 
     t = np.linspace(0, duration, int(sample_rate * duration))
     audio_data = np.sin(2 * np.pi * frequency * t)
-
     # Convert to int16
     audio_data = (audio_data * 32767).astype(np.int16)
-
     output_path = temp_dir / "sample_audio.wav"
     wavfile.write(str(output_path), sample_rate, audio_data)
-
     return output_path
 
 
@@ -174,9 +180,10 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_find_ffmpeg_comprehensive_paths(self) -> None:
         """Test FFmpeg detection with comprehensive path scenarios."""
-        with patch("subprocess.run") as mock_run, patch(
-            "os.path.isfile"
-        ) as mock_isfile:
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("os.path.isfile") as mock_isfile,
+        ):
 
             # Test when subprocess.run returns non-zero (not in PATH)
             mock_run.return_value = Mock(returncode=1, stderr="not found")
@@ -205,8 +212,9 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_find_ffmpeg_timeout_exception(self) -> None:
         """Test FFmpeg detection with timeout exception."""
-        with patch(
-            "subprocess.run", side_effect=subprocess.TimeoutExpired("which", 30)
+        with (
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired("which", 30)),
+            patch("os.path.isfile", return_value=False),
         ):
             result = subwhisper.find_ffmpeg()
             # Should still try common locations and return None if none found
@@ -216,7 +224,10 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_find_ffmpeg_general_exception(self) -> None:
         """Test FFmpeg detection with general exception."""
-        with patch("subprocess.run", side_effect=Exception("Command failed")):
+        with (
+            patch("subprocess.run", side_effect=Exception("Command failed")),
+            patch("os.path.isfile", return_value=False),
+        ):
             result = subwhisper.find_ffmpeg()
             # Should still try common locations and return None if none found
             assert result is None
@@ -225,8 +236,9 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_find_ffmpeg_file_check_exception(self) -> None:
         """Test FFmpeg detection with file check exceptions."""
-        with patch("subprocess.run") as mock_run, patch(
-            "os.path.isfile", side_effect=Exception("File access error")
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("os.path.isfile", side_effect=Exception("File access error")),
         ):
 
             mock_run.return_value = Mock(returncode=1, stderr="not found")
@@ -237,8 +249,10 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_find_ffmpeg_non_windows_platform(self) -> None:
         """Test FFmpeg detection on non-Windows platforms."""
-        with patch("sys.platform", "linux"), patch("subprocess.run") as mock_run, patch(
-            "os.path.isfile", return_value=False
+        with (
+            patch("sys.platform", "linux"),
+            patch("subprocess.run") as mock_run,
+            patch("os.path.isfile", return_value=False),
         ):
 
             mock_run.return_value = Mock(returncode=1, stderr="not found")
@@ -260,9 +274,10 @@ class TestSubWhisperCore:
         # Create a fake input video file
         input_video.write_text("fake video content")
 
-        with patch("subwhisper.find_ffmpeg", return_value="ffmpeg"), patch(
-            "subprocess.run"
-        ) as mock_run:
+        with (
+            patch("subwhisper.find_ffmpeg", return_value="ffmpeg"),
+            patch("subprocess.run") as mock_run,
+        ):
 
             # Mock successful FFmpeg execution
             mock_run.return_value = Mock(returncode=0, stderr="", stdout="")
@@ -309,9 +324,10 @@ class TestSubWhisperCore:
         input_video = temp_dir / "input.mp4"
         input_video.write_text("fake video")
 
-        with patch("subwhisper.find_ffmpeg", return_value="ffmpeg"), patch(
-            "subprocess.run"
-        ) as mock_run:
+        with (
+            patch("subwhisper.find_ffmpeg", return_value="ffmpeg"),
+            patch("subprocess.run") as mock_run,
+        ):
 
             # Mock FFmpeg failure
             mock_run.return_value = Mock(returncode=1, stderr="FFmpeg error message")
@@ -328,9 +344,10 @@ class TestSubWhisperCore:
 
         input_video.write_text("fake video")
 
-        with patch("subwhisper.find_ffmpeg", return_value="ffmpeg"), patch(
-            "subprocess.run"
-        ) as mock_run:
+        with (
+            patch("subwhisper.find_ffmpeg", return_value="ffmpeg"),
+            patch("subprocess.run") as mock_run,
+        ):
 
             # Mock successful FFmpeg execution but no output file created
             mock_run.return_value = Mock(returncode=0, stderr="", stdout="")
@@ -351,9 +368,10 @@ class TestSubWhisperCore:
 
         input_video.write_text("fake video")
 
-        with patch("subwhisper.find_ffmpeg", return_value="ffmpeg"), patch(
-            "subprocess.run"
-        ) as mock_run:
+        with (
+            patch("subwhisper.find_ffmpeg", return_value="ffmpeg"),
+            patch("subprocess.run") as mock_run,
+        ):
 
             mock_run.return_value = Mock(returncode=0, stderr="", stdout="")
 
@@ -370,8 +388,11 @@ class TestSubWhisperCore:
         input_video = temp_dir / "input.mp4"
         input_video.write_text("fake video")
 
-        with patch("subwhisper.find_ffmpeg", return_value="ffmpeg"), patch(
-            "subprocess.run", side_effect=subprocess.TimeoutExpired("ffmpeg", 3600)
+        with (
+            patch("subwhisper.find_ffmpeg", return_value="ffmpeg"),
+            patch(
+                "subprocess.run", side_effect=subprocess.TimeoutExpired("ffmpeg", 3600)
+            ),
         ):
 
             with pytest.raises(RuntimeError, match="timed out"):
@@ -384,8 +405,9 @@ class TestSubWhisperCore:
         input_video = temp_dir / "input.mp4"
         input_video.write_text("fake video")
 
-        with patch("subwhisper.find_ffmpeg", return_value="ffmpeg"), patch(
-            "subprocess.run", side_effect=RuntimeError("Unexpected error")
+        with (
+            patch("subwhisper.find_ffmpeg", return_value="ffmpeg"),
+            patch("subprocess.run", side_effect=RuntimeError("Unexpected error")),
         ):
 
             with pytest.raises(RuntimeError, match="Audio extraction failed"):
@@ -457,17 +479,26 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_cleanup_and_exit_mock(self) -> None:
         """Test cleanup and exit functionality with mocking."""
-        with patch("sys.exit") as mock_exit, patch(
-            "shutil.rmtree"
-        ) as mock_rmtree, patch("os.path.exists", return_value=True):
+        with (
+            patch("sys.exit") as mock_exit,
+            patch("shutil.rmtree") as mock_rmtree,
+            patch("os.path.exists", return_value=True),
+        ):
 
-            # Set a temporary directory
-            subwhisper.TEMP_DIR = "/fake/temp/dir"
+            # Save the original temp directory
+            original_temp_dir = subwhisper.TEMP_DIR
 
-            subwhisper.cleanup_and_exit(42)
+            try:
+                # Set a temporary directory
+                subwhisper.TEMP_DIR = "/fake/temp/dir"
 
-            mock_rmtree.assert_called_once_with("/fake/temp/dir")
-            mock_exit.assert_called_once_with(42)
+                subwhisper.cleanup_and_exit(42)
+
+                mock_rmtree.assert_called_once_with("/fake/temp/dir")
+                mock_exit.assert_called_once_with(42)
+            finally:
+                # Restore the original temp directory
+                subwhisper.TEMP_DIR = original_temp_dir
 
     @pytest.mark.unit
     @pytest.mark.timeout(60)
@@ -553,10 +584,8 @@ class TestSubWhisperCore:
         t = np.linspace(0, duration, int(sample_rate * duration))
         audio_data = np.sin(2 * np.pi * 440 * t)
         audio_data = (audio_data * 32767).astype(np.int16)
-
         audio_file = temp_dir / "test_audio.wav"
         wavfile.write(str(audio_file), sample_rate, audio_data)
-
         mock_result = {
             "segments": [{"start": 0.0, "end": 1.0, "text": "Test"}],
             "language": "en",
@@ -581,8 +610,9 @@ class TestSubWhisperCore:
             "language": "en",
         }
 
-        with patch("whisper.load_model") as mock_load_model, patch(
-            "scipy.io.wavfile.read", side_effect=Exception("Scipy error")
+        with (
+            patch("whisper.load_model") as mock_load_model,
+            patch("scipy.io.wavfile.read", side_effect=Exception("Scipy error")),
         ):
 
             mock_model = Mock()
@@ -606,18 +636,17 @@ class TestSubWhisperCore:
         duration = 1.0
         t = np.linspace(0, duration, int(original_rate * duration))
         audio_data = np.sin(2 * np.pi * 440 * t).astype(np.float32)
-
         audio_file = temp_dir / "high_rate_audio.wav"
         wavfile.write(str(audio_file), original_rate, audio_data)
-
         mock_result = {
             "segments": [{"start": 0.0, "end": 1.0, "text": "Resampled test"}],
             "language": "en",
         }
 
-        with patch("whisper.load_model") as mock_load_model, patch(
-            "scipy.signal.resample"
-        ) as mock_resample:
+        with (
+            patch("whisper.load_model") as mock_load_model,
+            patch("scipy.signal.resample") as mock_resample,
+        ):
 
             mock_model = Mock()
             mock_model.transcribe.return_value = mock_result
@@ -769,9 +798,11 @@ class TestSubWhisperCore:
             "segments": [{"start": 0.0, "end": 2.0, "text": "Mock transcription"}]
         }
 
-        with patch("subwhisper.extract_audio") as mock_extract, patch(
-            "subwhisper.transcribe_audio"
-        ) as mock_transcribe, patch("subwhisper.generate_srt") as mock_generate_srt:
+        with (
+            patch("subwhisper.extract_audio") as mock_extract,
+            patch("subwhisper.transcribe_audio") as mock_transcribe,
+            patch("subwhisper.generate_srt") as mock_generate_srt,
+        ):
 
             # Setup mocks
             mock_extract.return_value = str(temp_dir / "extracted.wav")
@@ -809,9 +840,10 @@ class TestSubWhisperCore:
         test_video = temp_dir / "test.mp4"
         test_video.write_text("fake video content")
 
-        with patch("subwhisper.extract_audio") as mock_extract, patch(
-            "subwhisper.transcribe_audio"
-        ) as mock_transcribe:
+        with (
+            patch("subwhisper.extract_audio") as mock_extract,
+            patch("subwhisper.transcribe_audio") as mock_transcribe,
+        ):
 
             mock_extract.return_value = str(temp_dir / "extracted.wav")
             mock_transcribe.return_value = None  # Transcription failure
@@ -833,9 +865,11 @@ class TestSubWhisperCore:
 
         mock_transcription = {"segments": [{"start": 0.0, "end": 1.0, "text": "Test"}]}
 
-        with patch("subwhisper.extract_audio") as mock_extract, patch(
-            "subwhisper.transcribe_audio"
-        ) as mock_transcribe, patch("subwhisper.generate_srt") as mock_generate_srt:
+        with (
+            patch("subwhisper.extract_audio") as mock_extract,
+            patch("subwhisper.transcribe_audio") as mock_transcribe,
+            patch("subwhisper.generate_srt") as mock_generate_srt,
+        ):
 
             mock_extract.return_value = str(temp_dir / "extracted.wav")
             mock_transcribe.return_value = mock_transcription
@@ -862,9 +896,11 @@ class TestSubWhisperCore:
 
         mock_transcription = {"segments": [{"start": 0.0, "end": 1.0, "text": "Test"}]}
 
-        with patch("subwhisper.extract_audio") as mock_extract, patch(
-            "subwhisper.transcribe_audio"
-        ) as mock_transcribe, patch("subwhisper.generate_srt") as mock_generate_srt:
+        with (
+            patch("subwhisper.extract_audio") as mock_extract,
+            patch("subwhisper.transcribe_audio") as mock_transcribe,
+            patch("subwhisper.generate_srt") as mock_generate_srt,
+        ):
 
             mock_extract.return_value = str(temp_dir / "extracted.wav")
             mock_transcribe.return_value = mock_transcription
@@ -892,13 +928,12 @@ class TestSubWhisperCore:
 
         mock_transcription = {"segments": [{"start": 0.0, "end": 1.0, "text": "Test"}]}
 
-        with patch("subwhisper.extract_audio") as mock_extract, patch(
-            "subwhisper.transcribe_audio"
-        ) as mock_transcribe, patch(
-            "subwhisper.generate_srt"
-        ) as _mock_generate_srt, patch(
-            "subprocess.run"
-        ) as mock_subprocess:
+        with (
+            patch("subwhisper.extract_audio") as mock_extract,
+            patch("subwhisper.transcribe_audio") as mock_transcribe,
+            patch("subwhisper.generate_srt") as _mock_generate_srt,
+            patch("subprocess.run") as mock_subprocess,
+        ):
 
             mock_extract.return_value = str(temp_dir / "extracted.wav")
             mock_transcribe.return_value = mock_transcription
@@ -932,13 +967,12 @@ class TestSubWhisperCore:
 
         mock_transcription = {"segments": [{"start": 0.0, "end": 1.0, "text": "Test"}]}
 
-        with patch("subwhisper.extract_audio") as mock_extract, patch(
-            "subwhisper.transcribe_audio"
-        ) as mock_transcribe, patch(
-            "subwhisper.generate_srt"
-        ) as _mock_generate_srt, patch(
-            "subprocess.run"
-        ) as mock_subprocess:
+        with (
+            patch("subwhisper.extract_audio") as mock_extract,
+            patch("subwhisper.transcribe_audio") as mock_transcribe,
+            patch("subwhisper.generate_srt") as _mock_generate_srt,
+            patch("subprocess.run") as mock_subprocess,
+        ):
 
             mock_extract.return_value = str(temp_dir / "extracted.wav")
             mock_transcribe.return_value = mock_transcription
@@ -964,12 +998,11 @@ class TestSubWhisperCore:
 
         mock_transcription = {"segments": [{"start": 0.0, "end": 1.0, "text": "Test"}]}
 
-        with patch("subwhisper.extract_audio") as mock_extract, patch(
-            "subwhisper.transcribe_audio"
-        ) as mock_transcribe, patch(
-            "subwhisper.generate_srt"
-        ) as _mock_generate_srt, patch(
-            "subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1800)
+        with (
+            patch("subwhisper.extract_audio") as mock_extract,
+            patch("subwhisper.transcribe_audio") as mock_transcribe,
+            patch("subwhisper.generate_srt") as _mock_generate_srt,
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1800)),
         ):
 
             mock_extract.return_value = str(temp_dir / "extracted.wav")
@@ -991,12 +1024,11 @@ class TestSubWhisperCore:
 
         mock_transcription = {"segments": [{"start": 0.0, "end": 1.0, "text": "Test"}]}
 
-        with patch("subwhisper.extract_audio") as mock_extract, patch(
-            "subwhisper.transcribe_audio"
-        ) as mock_transcribe, patch(
-            "subwhisper.generate_srt"
-        ) as _mock_generate_srt, patch(
-            "subprocess.run", side_effect=Exception("Subprocess error")
+        with (
+            patch("subwhisper.extract_audio") as mock_extract,
+            patch("subwhisper.transcribe_audio") as mock_transcribe,
+            patch("subwhisper.generate_srt") as _mock_generate_srt,
+            patch("subprocess.run", side_effect=Exception("Subprocess error")),
         ):
 
             mock_extract.return_value = str(temp_dir / "extracted.wav")
@@ -1113,8 +1145,9 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_cleanup_and_exit_temp_dir_missing(self) -> None:
         """Test cleanup when temp directory is set but doesn't exist."""
-        with patch("sys.exit") as mock_exit, patch(
-            "os.path.exists", return_value=False
+        with (
+            patch("sys.exit") as mock_exit,
+            patch("os.path.exists", return_value=False),
         ):
 
             original_temp_dir = subwhisper.TEMP_DIR
@@ -1130,10 +1163,11 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_cleanup_and_exit_rmtree_failure(self) -> None:
         """Test cleanup when rmtree fails."""
-        with patch("sys.exit") as mock_exit, patch(
-            "os.path.exists", return_value=True
-        ), patch("shutil.rmtree", side_effect=Exception("Permission denied")), patch(
-            "pathlib.Path.rglob", return_value=iter([])
+        with (
+            patch("sys.exit") as mock_exit,
+            patch("os.path.exists", return_value=True),
+            patch("shutil.rmtree", side_effect=Exception("Permission denied")),
+            patch("pathlib.Path.rglob", return_value=iter([])),
         ):
 
             original_temp_dir = subwhisper.TEMP_DIR
@@ -1207,66 +1241,38 @@ class TestSubWhisperIntegration:
     @pytest.mark.integration
     @pytest.mark.timeout(180)
     @pytest.mark.slow
-    def test_end_to_end_with_tiny_model(self, temp_dir: Path) -> None:
-        """Test complete end-to-end processing with tiny Whisper model."""
-        ffmpeg_path = subwhisper.find_ffmpeg()
-        if not ffmpeg_path:
-            pytest.skip("FFmpeg not available for integration testing")
+    def test_end_to_end_with_tiny_model(
+        self, sample_video_file: Path, temp_dir: Path
+    ) -> None:
+        """Test complete end-to-end processing with tiny Whisper model.
 
-        # Create a test video with known audio content
-        test_video = temp_dir / "e2e_test.mp4"
-
+        Uses real video for testing.
+        """
         try:
-            # Generate a short test video with audio
-            cmd = [
-                ffmpeg_path,
-                "-f",
-                "lavfi",
-                "-i",
-                "color=red:duration=5:size=320x240:rate=1",
-                "-f",
-                "lavfi",
-                "-i",
-                "sine=frequency=440:duration=5",
-                "-c:v",
-                "libx264",
-                "-c:a",
-                "aac",
-                "-shortest",
-                str(test_video),
-                "-y",
-            ]
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=60, check=False
-            )
-
-            if result.returncode != 0 or not test_video.exists():
-                pytest.skip(f"Could not create test video: {result.stderr}")
-
             # Create mock args for processing
             args = Mock()
             args.model = "tiny"  # Use smallest model for speed
             args.language = None
-            args.output = None
+            args.output = str(temp_dir / "test_output.srt")
             args.batch = False
             args.max_segment_length = None
             args.post_process = None
 
-            # Process the video
-            success = subwhisper.process_video(str(test_video), args)
+            # Process the real video file
+            success = subwhisper.process_video(str(sample_video_file), args)
 
             # Verify output
             assert success is True
 
-            expected_srt = test_video.with_suffix(".srt")
-            assert expected_srt.exists()
+            output_srt = Path(args.output)
+            assert output_srt.exists()
 
             # Basic validation of SRT content
-            srt_content = expected_srt.read_text(encoding="utf-8")
+            srt_content = output_srt.read_text(encoding="utf-8")
+            # The real test video should produce some transcription content
+            # Even if it's not perfect, Whisper should produce something
             assert len(srt_content.strip()) > 0  # Should have some content
 
-        except subprocess.TimeoutExpired:
-            pytest.skip("Video generation timed out")
         except Exception as e:
             pytest.skip(f"Integration test failed due to environment: {e}")
 
@@ -1322,12 +1328,12 @@ class TestSubWhisperMainFunction:
 
         test_args = ["subwhisper.py", str(test_video), "--model", "tiny"]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", return_value=True
-        ), patch("subwhisper.cleanup_and_exit") as mock_cleanup, patch(
-            "sys.exit"
-        ), patch(
-            "builtins.print"
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", return_value=True),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
         ):
 
             subwhisper.main()
@@ -1342,12 +1348,12 @@ class TestSubWhisperMainFunction:
 
         test_args = ["subwhisper.py", str(test_video)]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", return_value=False
-        ), patch("subwhisper.cleanup_and_exit") as mock_cleanup, patch(
-            "sys.exit"
-        ), patch(
-            "builtins.print"
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", return_value=False),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
         ):
 
             subwhisper.main()
@@ -1376,15 +1382,19 @@ class TestSubWhisperMainFunction:
             "mp4,mkv",
         ]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", return_value=True
-        ), patch("subwhisper.cleanup_and_exit") as mock_cleanup, patch(
-            "sys.exit"
-        ), patch(
-            "builtins.print"
-        ), patch(
-            "glob.glob",
-            return_value=[str(video_dir / "video1.mp4"), str(video_dir / "video2.mkv")],
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", return_value=True),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
+            patch(
+                "glob.glob",
+                return_value=[
+                    str(video_dir / "video1.mp4"),
+                    str(video_dir / "video2.mkv"),
+                ],
+            ),
         ):
 
             subwhisper.main()
@@ -1399,10 +1409,12 @@ class TestSubWhisperMainFunction:
 
         test_args = ["subwhisper.py", str(video_dir), "--batch"]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.cleanup_and_exit"
-        ) as mock_cleanup, patch("sys.exit"), patch("builtins.print"), patch(
-            "glob.glob", return_value=[]
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
+            patch("glob.glob", return_value=[]),
         ):
 
             subwhisper.main()
@@ -1417,9 +1429,12 @@ class TestSubWhisperMainFunction:
 
         test_args = ["subwhisper.py", str(fake_file), "--batch"]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.cleanup_and_exit"
-        ) as mock_cleanup, patch("sys.exit"), patch("builtins.print"):
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
+        ):
 
             subwhisper.main()
             mock_cleanup.assert_called_once_with(0)
@@ -1438,12 +1453,12 @@ class TestSubWhisperMainFunction:
             "--remove-hi",
         ]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", return_value=True
-        ), patch("subwhisper.cleanup_and_exit") as mock_cleanup, patch(
-            "sys.exit"
-        ), patch(
-            "builtins.print"
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", return_value=True),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
         ):
 
             subwhisper.main()
@@ -1466,9 +1481,12 @@ class TestSubWhisperMainFunction:
             "--fix-common-errors",
         ]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", return_value=True
-        ), patch("subwhisper.cleanup_and_exit") as mock_cleanup, patch("sys.exit"):
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", return_value=True),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+        ):
 
             subwhisper.main()
 
@@ -1486,12 +1504,12 @@ class TestSubWhisperMainFunction:
 
         test_args = ["subwhisper.py", str(test_video)]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", side_effect=KeyboardInterrupt()
-        ), patch("subwhisper.cleanup_and_exit") as mock_cleanup, patch(
-            "sys.exit"
-        ), patch(
-            "builtins.print"
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", side_effect=KeyboardInterrupt()),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
         ):
 
             subwhisper.main()
@@ -1509,12 +1527,14 @@ class TestSubWhisperMainFunction:
 
         test_args = ["subwhisper.py", str(test_video)]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", side_effect=Exception("Unexpected error")
-        ), patch("subwhisper.cleanup_and_exit") as mock_cleanup, patch(
-            "sys.exit"
-        ), patch(
-            "builtins.print"
+        with (
+            patch("sys.argv", test_args),
+            patch(
+                "subwhisper.process_video", side_effect=Exception("Unexpected error")
+            ),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
         ):
 
             subwhisper.main()
@@ -1543,14 +1563,13 @@ class TestSubWhisperMainFunction:
                 return True
             return False
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", side_effect=mock_process_video
-        ), patch("subwhisper.cleanup_and_exit") as mock_cleanup, patch(
-            "sys.exit"
-        ), patch(
-            "builtins.print"
-        ), patch(
-            "glob.glob", return_value=[str(video1), str(video2)]
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", side_effect=mock_process_video),
+            patch("subwhisper.cleanup_and_exit") as mock_cleanup,
+            patch("sys.exit"),
+            patch("builtins.print"),
+            patch("glob.glob", return_value=[str(video1), str(video2)]),
         ):
 
             subwhisper.main()
@@ -1565,12 +1584,13 @@ class TestSubWhisperMainFunction:
 
         test_args = ["subwhisper.py", str(test_video)]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", return_value=True
-        ), patch("subwhisper.cleanup_and_exit"), patch("sys.exit"), patch(
-            "builtins.print"
-        ), patch(
-            "torch.cuda.is_available", return_value=True
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", return_value=True),
+            patch("subwhisper.cleanup_and_exit"),
+            patch("sys.exit"),
+            patch("builtins.print"),
+            patch("torch.cuda.is_available", return_value=True),
         ):
 
             subwhisper.main()
@@ -1585,12 +1605,13 @@ class TestSubWhisperMainFunction:
 
         test_args = ["subwhisper.py", str(test_video)]
 
-        with patch("sys.argv", test_args), patch(
-            "subwhisper.process_video", return_value=True
-        ), patch("subwhisper.cleanup_and_exit"), patch("sys.exit"), patch(
-            "builtins.print"
-        ), patch(
-            "torch.cuda.is_available", side_effect=Exception("PyTorch error")
+        with (
+            patch("sys.argv", test_args),
+            patch("subwhisper.process_video", return_value=True),
+            patch("subwhisper.cleanup_and_exit"),
+            patch("sys.exit"),
+            patch("builtins.print"),
+            patch("torch.cuda.is_available", side_effect=Exception("PyTorch error")),
         ):
 
             subwhisper.main()
@@ -1607,8 +1628,11 @@ class TestSubWhisperErrorRecovery:
         input_video = temp_dir / "input.mp4"
         input_video.write_text("fake video")
 
-        with patch("subwhisper.find_ffmpeg", return_value="ffmpeg"), patch(
-            "subprocess.run", side_effect=subprocess.TimeoutExpired("ffmpeg", 30)
+        with (
+            patch("subwhisper.find_ffmpeg", return_value="ffmpeg"),
+            patch(
+                "subprocess.run", side_effect=subprocess.TimeoutExpired("ffmpeg", 30)
+            ),
         ):
 
             with pytest.raises(RuntimeError, match="timed out"):

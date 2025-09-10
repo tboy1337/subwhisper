@@ -19,7 +19,8 @@ import threading
 import time
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, TypedDict, Union
+from subprocess import CompletedProcess
+from typing import Any, Dict, List, Optional, TypedDict, Union
 
 import numpy as np
 import scipy.io.wavfile as wav
@@ -47,6 +48,25 @@ class WhisperResult(TypedDict):
 
     segments: List[WhisperSegment]
     language: str
+
+
+class SubWhisperArgs(TypedDict):
+    """Type definition for SubWhisper command line arguments."""
+
+    video_path: str
+    batch: bool
+    extensions: str
+    model: str
+    language: Optional[str]
+    output: Optional[str]
+    max_segment_length: Optional[int]
+    post_process: Optional[str]
+    fix_common_errors: bool
+    remove_hi: bool
+    auto_split_long_lines: bool
+    fix_punctuation: bool
+    ocr_fix: bool
+    convert_to: Optional[str]
 
 
 # Logger configuration
@@ -79,11 +99,16 @@ def find_ffmpeg() -> Optional[str]:
         r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
         r"C:\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
-        # Winget installation location
+        # Winget installation location - both versioned and essentials
         os.path.expanduser(
             r"~\AppData\Local\Microsoft\WinGet\Packages"
             + r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
             + r"\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
+        ),
+        os.path.expanduser(
+            r"~\AppData\Local\Microsoft\WinGet\Packages"
+            + r"\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe"
+            + r"\ffmpeg-8.0-essentials_build\bin\ffmpeg.exe"
         ),
         # Default command (if in PATH)
         "ffmpeg",
@@ -98,7 +123,7 @@ def find_ffmpeg() -> Optional[str]:
             check_cmd = ["which", "ffmpeg"]
 
         logger.debug(f"Checking PATH for FFmpeg using command: {' '.join(check_cmd)}")
-        result = subprocess.run(
+        result: CompletedProcess[str] = subprocess.run(
             check_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -218,7 +243,7 @@ def extract_audio(
         logger.info(f"Executing FFmpeg command: {' '.join(command)}")
         start_time = time.time()
 
-        result = subprocess.run(
+        result: CompletedProcess[str] = subprocess.run(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -428,7 +453,6 @@ def process_video(video_path: Union[str, Path], args: argparse.Namespace) -> boo
         # Generate SRT file
         logger.info("Beginning SRT generation phase...")
         generate_srt(result["segments"], str(output_path), args.max_segment_length)
-
         # Apply post-processing if specified
         if args.post_process:
             logger.info("Beginning post-processing phase...")
@@ -436,15 +460,12 @@ def process_video(video_path: Union[str, Path], args: argparse.Namespace) -> boo
             # Replace placeholders in the command
             process_command = args.post_process
             process_command = process_command.replace("INPUT_FILE", str(output_path))
-
             # Add support for basename placeholder (for Docker)
             basename = output_path.name
             process_command = process_command.replace("INPUT_FILE_BASENAME", basename)
-
             logger.debug(f"Post-processing command: {process_command}")
-
             try:
-                subprocess_result = subprocess.run(
+                subprocess_result: CompletedProcess[str] = subprocess.run(
                     process_command,
                     shell=True,
                     stdout=subprocess.PIPE,
@@ -517,7 +538,7 @@ def transcribe_audio(  # pylint: disable=too-many-return-statements
         # Load Whisper model
         logger.info(f"Loading Whisper model: {args.model}")
         try:
-            model = whisper.load_model(args.model)
+            model: Any = whisper.load_model(args.model)
             logger.info(f"Successfully loaded Whisper model: {args.model}")
         except Exception as e:
             logger.error(f"Failed to load Whisper model '{args.model}': {e}")
@@ -559,27 +580,22 @@ def transcribe_audio(  # pylint: disable=too-many-return-statements
                     audio_data = audio_data.astype(np.float32) / 2147483648.0
                 else:
                     logger.debug(f"Audio data already in format: {audio_data.dtype}")
-
                 # Convert to mono if stereo
                 if audio_data.ndim > 1:
                     logger.debug(
                         f"Converting stereo audio to mono (shape: {audio_data.shape})"
                     )
                     audio_data = np.mean(audio_data, axis=1)
-
                 # Resample to 16kHz if needed
                 if sample_rate != 16000:
                     logger.info(f"Resampling audio from {sample_rate}Hz to 16kHz")
-
                     audio_data = scipy.signal.resample(
                         audio_data, int(len(audio_data) * 16000 / sample_rate)
                     )
 
                 logger.debug(f"Final audio shape: {audio_data.shape}")
-
                 # Perform transcription with the loaded audio
-                result = model.transcribe(audio_data, **transcribe_options)
-
+                result: Any = model.transcribe(audio_data, **transcribe_options)
             except Exception as audio_error:
                 logger.warning(
                     f"Error loading audio with scipy: {audio_error}. "
@@ -588,7 +604,6 @@ def transcribe_audio(  # pylint: disable=too-many-return-statements
 
                 # Fall back to whisper's default loading
                 result = model.transcribe(str(audio_path_obj), **transcribe_options)
-
             # Calculate and log processing time
             elapsed_time = time.time() - start_time
             logger.info(f"Transcription completed in {elapsed_time:.2f} seconds")
@@ -780,7 +795,6 @@ def main() -> None:
         if args.batch:
             logger.info("Starting batch processing mode")
             video_dir = Path(args.video_path)
-
             if not video_dir.is_dir():
                 logger.error(f"Specified path is not a directory: {video_dir}")
                 print(f"Error: {video_dir} is not a directory")
@@ -797,14 +811,12 @@ def main() -> None:
             # Get list of video files
             extensions = [ext.strip().lower() for ext in args.extensions.split(",")]
             logger.info(f"Searching for video files with extensions: {extensions}")
-
             video_files = []
             for ext in extensions:
                 pattern = f"{video_dir}/**/*.{ext}"
                 found_files = glob.glob(pattern, recursive=True)
                 video_files.extend(found_files)
                 logger.debug(f"Found {len(found_files)} files with extension .{ext}")
-
                 # Also check uppercase extensions
                 pattern_upper = f"{video_dir}/**/*.{ext.upper()}"
                 found_files_upper = glob.glob(pattern_upper, recursive=True)
@@ -924,7 +936,6 @@ def generate_docker_post_process_cmd(args: argparse.Namespace) -> Optional[str]:
     # Set output format (default is subrip/srt)
     output_format = args.convert_to if args.convert_to else "subrip"
     docker_cmd += f" {output_format}"
-
     # Add operations
     if args.fix_common_errors:
         docker_cmd += " /fixcommonerrors"
