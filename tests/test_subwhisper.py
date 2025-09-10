@@ -5,15 +5,16 @@ Comprehensive pytest-based test suite for SubWhisper.
 This module provides 100% test coverage for the SubWhisper application
 with proper timeouts, fixtures, and real-world deployment testing.
 """
-# pylint: disable=redefined-outer-name,too-many-public-methods,protected-access,too-many-lines
+# pylint: disable=redefined-outer-name,too-many-public-methods,protected-access,too-many-lines,duplicate-code
 
+import concurrent.futures
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Generator
+from typing import Generator, List
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -22,7 +23,8 @@ from scipy.io import wavfile
 
 # Add parent directory to path so we can import subwhisper
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import subwhisper
+import subwhisper  # pylint: disable=wrong-import-position
+from subwhisper import WhisperSegment  # pylint: disable=wrong-import-position
 
 
 # Global fixtures available to all test classes
@@ -78,6 +80,8 @@ def sample_video_file(temp_dir: Path) -> Path:
 
     # Skip video-dependent tests if no video is available
     pytest.skip("No test video file available and cannot generate one")
+    # This will never be reached, but satisfies the return type
+    return Path()  # type: ignore[unreachable]
 
 
 @pytest.fixture
@@ -248,7 +252,7 @@ class TestSubWhisperCore:
 
     @pytest.mark.unit
     @pytest.mark.timeout(60)
-    def test_extract_audio_mock(self, temp_dir: Path, mock_args: Mock) -> None:
+    def test_extract_audio_mock(self, temp_dir: Path) -> None:
         """Test audio extraction with mocked subprocess calls."""
         input_video = temp_dir / "input.mp4"
         output_audio = temp_dir / "output.wav"
@@ -391,7 +395,7 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_generate_srt_basic(self, temp_dir: Path) -> None:
         """Test basic SRT generation functionality."""
-        test_segments = [
+        test_segments: List[WhisperSegment] = [
             {"start": 0.0, "end": 2.5, "text": "First test segment."},
             {"start": 3.0, "end": 5.5, "text": "Second test segment."},
             {"start": 6.0, "end": 8.0, "text": "Third segment with content."},
@@ -417,11 +421,14 @@ class TestSubWhisperCore:
     @pytest.mark.timeout(30)
     def test_generate_srt_with_max_length(self, temp_dir: Path) -> None:
         """Test SRT generation with segment length limits."""
-        test_segments = [
+        test_segments: List[WhisperSegment] = [
             {
                 "start": 0.0,
                 "end": 5.0,
-                "text": "This is a very long segment that should be split into multiple lines because it exceeds the maximum character limit.",
+                "text": (
+                    "This is a very long segment that should be split into "
+                    "multiple lines because it exceeds the maximum character limit."
+                ),
             }
         ]
 
@@ -465,7 +472,7 @@ class TestSubWhisperCore:
     @pytest.mark.unit
     @pytest.mark.timeout(60)
     def test_transcribe_audio_mock(
-        self, temp_dir: Path, sample_audio_data: Path, mock_args: Mock
+        self, sample_audio_data: Path, mock_args: Mock
     ) -> None:
         """Test audio transcription with mocked Whisper model."""
         mock_result = {
@@ -568,7 +575,7 @@ class TestSubWhisperCore:
     def test_transcribe_audio_scipy_loading_failure_fallback(
         self, sample_audio_data: Path, mock_args: Mock
     ) -> None:
-        """Test transcription with scipy loading failure, falls back to whisper loading."""
+        """Test transcription with scipy loading failure, falls back to whisper."""
         mock_result = {
             "segments": [{"start": 0.0, "end": 1.0, "text": "Test"}],
             "language": "en",
@@ -889,7 +896,7 @@ class TestSubWhisperCore:
             "subwhisper.transcribe_audio"
         ) as mock_transcribe, patch(
             "subwhisper.generate_srt"
-        ) as mock_generate_srt, patch(
+        ) as _mock_generate_srt, patch(
             "subprocess.run"
         ) as mock_subprocess:
 
@@ -929,7 +936,7 @@ class TestSubWhisperCore:
             "subwhisper.transcribe_audio"
         ) as mock_transcribe, patch(
             "subwhisper.generate_srt"
-        ) as mock_generate_srt, patch(
+        ) as _mock_generate_srt, patch(
             "subprocess.run"
         ) as mock_subprocess:
 
@@ -939,7 +946,8 @@ class TestSubWhisperCore:
                 returncode=1, stdout="", stderr="Post-processing failed"
             )
 
-            # Should still return True (video processing succeeded, only post-processing failed)
+            # Should still return True (video processing succeeded,
+            # only post-processing failed)
             result = subwhisper.process_video(str(test_video), mock_args)
             assert result is True
 
@@ -960,7 +968,7 @@ class TestSubWhisperCore:
             "subwhisper.transcribe_audio"
         ) as mock_transcribe, patch(
             "subwhisper.generate_srt"
-        ) as mock_generate_srt, patch(
+        ) as _mock_generate_srt, patch(
             "subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1800)
         ):
 
@@ -987,7 +995,7 @@ class TestSubWhisperCore:
             "subwhisper.transcribe_audio"
         ) as mock_transcribe, patch(
             "subwhisper.generate_srt"
-        ) as mock_generate_srt, patch(
+        ) as _mock_generate_srt, patch(
             "subprocess.run", side_effect=Exception("Subprocess error")
         ):
 
@@ -1270,15 +1278,13 @@ class TestSubWhisperThreadSafety:
     @pytest.mark.timeout(30)
     def test_temp_dir_thread_safety(self) -> None:
         """Test that temporary directory operations are thread-safe."""
-        import concurrent.futures
-        import threading
 
         # Reset global temp dir
         subwhisper.TEMP_DIR = None
 
         results = []
 
-        def create_temp_dir_worker():
+        def create_temp_dir_worker() -> str:
             """Worker function that creates temporary directories."""
             with subwhisper._TEMP_DIR_LOCK:
                 if subwhisper.TEMP_DIR is None:
@@ -1297,8 +1303,10 @@ class TestSubWhisperThreadSafety:
         ), "Thread safety violation: multiple temp directories created"
 
         # Clean up
-        if subwhisper.TEMP_DIR and os.path.exists(subwhisper.TEMP_DIR):
-            shutil.rmtree(subwhisper.TEMP_DIR)
+        if subwhisper.TEMP_DIR and os.path.exists(
+            subwhisper.TEMP_DIR
+        ):  # type: ignore[unreachable]
+            shutil.rmtree(subwhisper.TEMP_DIR)  # type: ignore[unreachable]
             subwhisper.TEMP_DIR = None
 
 
@@ -1444,7 +1452,7 @@ class TestSubWhisperMainFunction:
     @pytest.mark.unit
     @pytest.mark.timeout(60)
     def test_main_docker_preset_overrides_custom_postprocess(
-        self, temp_dir: Path, capsys
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test that Docker presets override custom post-process commands."""
         test_video = temp_dir / "test.mp4"
@@ -1530,7 +1538,7 @@ class TestSubWhisperMainFunction:
         test_args = ["subwhisper.py", str(video_dir), "--batch"]
 
         # Mock process_video to return True for first, False for second
-        def mock_process_video(video_path, args):
+        def mock_process_video(video_path: str, _args: Mock) -> bool:
             if "video1" in str(video_path):
                 return True
             return False
@@ -1609,7 +1617,7 @@ class TestSubWhisperErrorRecovery:
     @pytest.mark.unit
     @pytest.mark.timeout(30)
     def test_transcription_model_loading_failure(
-        self, temp_dir: Path, sample_audio_data: Path, mock_args: Mock
+        self, sample_audio_data: Path, mock_args: Mock
     ) -> None:
         """Test handling of Whisper model loading failures."""
         with patch(
@@ -1622,7 +1630,7 @@ class TestSubWhisperErrorRecovery:
     @pytest.mark.timeout(30)
     def test_srt_generation_io_error(self, temp_dir: Path) -> None:
         """Test SRT generation with I/O errors."""
-        segments = [{"start": 0.0, "end": 1.0, "text": "Test"}]
+        segments: List[WhisperSegment] = [{"start": 0.0, "end": 1.0, "text": "Test"}]
 
         # Try to write to a directory instead of a file (should cause IO error)
         invalid_output = temp_dir / "invalid_dir"

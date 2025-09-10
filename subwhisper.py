@@ -81,9 +81,9 @@ def find_ffmpeg() -> Optional[str]:
         r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
         # Winget installation location
         os.path.expanduser(
-            r"~\AppData\Local\Microsoft\WinGet\Packages" +
-            r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe" +
-            r"\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
+            r"~\AppData\Local\Microsoft\WinGet\Packages"
+            + r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
+            + r"\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
         ),
         # Default command (if in PATH)
         "ffmpeg",
@@ -277,7 +277,7 @@ def generate_srt(
     max_segment_length: Optional[int] = None,
 ) -> None:
     """Generate an SRT file from the Whisper segments.
-    
+
     Optional splitting of long segments is supported.
 
     Args:
@@ -851,9 +851,7 @@ def main() -> None:
                     )
                 else:
                     failed += 1
-                    logger.error(
-                        f"Failed to process file {i + 1}/{len(video_files)}"
-                    )
+                    logger.error(f"Failed to process file {i + 1}/{len(video_files)}")
 
             total_time = time.time() - start_time
             logger.info(
@@ -920,7 +918,7 @@ def generate_docker_post_process_cmd(args: argparse.Namespace) -> Optional[str]:
     # Start building Docker command
     docker_cmd = (
         'docker run --rm -v "$(pwd)":/subtitles seconv:1.0 '
-        '/subtitles/INPUT_FILE_BASENAME'
+        "/subtitles/INPUT_FILE_BASENAME"
     )
 
     # Set output format (default is subrip/srt)

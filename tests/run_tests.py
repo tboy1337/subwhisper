@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 
-def run_tests(verbose=False, coverage=True, timeout=300):
+def run_tests(verbose: bool = False, coverage: bool = True, timeout: int = 300) -> int:
     """Run all the pytest-based tests for SubWhisper"""
     # Build pytest command
     cmd = [sys.executable, "-m", "pytest"]
