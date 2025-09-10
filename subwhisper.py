@@ -5,6 +5,7 @@ This module provides functionality to automatically generate subtitles for video
 using OpenAI's Whisper speech-to-text model with extensive logging and error handling
 for real-world deployment.
 """
+# pylint: disable=logging-fstring-interpolation
 
 import argparse
 import glob
@@ -20,9 +21,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, TypedDict, Union
 
-import torch
+import numpy as np
+import scipy.io.wavfile as wav
+import scipy.signal
 import whisper
-from tqdm import tqdm
 
 # Create a temp directory for extracted audio
 TEMP_DIR: Optional[str] = None
@@ -79,7 +81,9 @@ def find_ffmpeg() -> Optional[str]:
         r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
         # Winget installation location
         os.path.expanduser(
-            r"~\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
+            r"~\AppData\Local\Microsoft\WinGet\Packages" +
+            r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe" +
+            r"\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
         ),
         # Default command (if in PATH)
         "ffmpeg",
@@ -106,8 +110,7 @@ def find_ffmpeg() -> Optional[str]:
             ffmpeg_path = result.stdout.strip().split("\n")[0]
             logger.info(f"FFmpeg found in PATH: {ffmpeg_path}")
             return ffmpeg_path
-        else:
-            logger.debug(f"FFmpeg not found in PATH, stderr: {result.stderr}")
+        logger.debug(f"FFmpeg not found in PATH, stderr: {result.stderr}")
     except subprocess.TimeoutExpired:
         logger.warning("Timeout expired while searching for FFmpeg in PATH")
     except Exception as e:
@@ -122,10 +125,10 @@ def find_ffmpeg() -> Optional[str]:
                     f"FFmpeg found at location {i}/{len(ffmpeg_locations)}: {location}"
                 )
                 return location
-            else:
-                logger.debug(
-                    f"FFmpeg not found at location {i}/{len(ffmpeg_locations)}: {location}"
-                )
+
+            logger.debug(
+                f"FFmpeg not found at location {i}/{len(ffmpeg_locations)}: {location}"
+            )
         except Exception as e:
             logger.debug(f"Error checking FFmpeg location {location}: {e}")
 
@@ -150,7 +153,8 @@ def extract_audio(
 
     Args:
         video_path: Path to the input video file.
-        output_path: Optional output path for extracted audio. If None, creates temp file.
+        output_path: Optional output path for extracted audio.
+            If None, creates temp file.
 
     Returns:
         Path to the extracted audio file.
@@ -160,7 +164,7 @@ def extract_audio(
         FileNotFoundError: If FFmpeg executable is not found.
         ValueError: If input video path is invalid.
     """
-    global TEMP_DIR
+    global TEMP_DIR  # pylint: disable=global-statement
 
     # Validate input
     if not video_path:
@@ -180,7 +184,6 @@ def extract_audio(
                 logger.info(f"Created temporary directory: {TEMP_DIR}")
 
         # Create a safe filename based on the input video name
-        basename = video_path_obj.name
         basename_no_ext = video_path_obj.stem
         output_path = os.path.join(TEMP_DIR, f"{basename_no_ext}.wav")
         logger.debug(f"Generated output path: {output_path}")
@@ -221,6 +224,7 @@ def extract_audio(
             stderr=subprocess.PIPE,
             text=True,
             timeout=3600,  # 1 hour timeout for large files
+            check=False,
         )
 
         extraction_time = time.time() - start_time
@@ -245,7 +249,8 @@ def extract_audio(
         file_size = output_path_obj.stat().st_size
         if file_size < 1000:  # Less than 1KB is suspicious
             logger.warning(
-                f"Extracted audio file is very small ({file_size} bytes), may indicate extraction issues"
+                f"Extracted audio file is very small ({file_size} bytes), "
+                "may indicate extraction issues"
             )
         else:
             logger.info(
@@ -257,7 +262,7 @@ def extract_audio(
     except subprocess.TimeoutExpired:
         error_msg = f"Audio extraction timed out after 1 hour for file: {video_path}"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        raise RuntimeError(error_msg) from None
     except FileNotFoundError:
         logger.error("FFmpeg executable not found")
         raise
@@ -271,7 +276,9 @@ def generate_srt(
     output_file: Union[str, Path],
     max_segment_length: Optional[int] = None,
 ) -> None:
-    """Generate an SRT file from the Whisper segments with optional splitting of long segments.
+    """Generate an SRT file from the Whisper segments.
+    
+    Optional splitting of long segments is supported.
 
     Args:
         segments: List of segment dictionaries containing start, end, and text.
@@ -293,7 +300,7 @@ def generate_srt(
         with open(output_file, "w", encoding="utf-8") as f:
             subtitle_index = 1
 
-            for i, segment in enumerate(segments):
+            for segment in segments:
                 start = segment["start"]
                 end = segment["end"]
                 text = segment["text"].strip()
@@ -323,7 +330,8 @@ def generate_srt(
                             # Write the current line
                             f.write(f"{subtitle_index}\n")
                             f.write(
-                                f"{format_timestamp(start)} --> {format_timestamp(sub_end)}\n"
+                                f"{format_timestamp(start)} --> "
+                                f"{format_timestamp(sub_end)}\n"
                             )
                             f.write(f"{' '.join(current_line)}\n\n")
 
@@ -381,7 +389,7 @@ def process_video(video_path: Union[str, Path], args: argparse.Namespace) -> boo
 
         file_size = video_path_obj.stat().st_size
         logger.info(
-            f"Video file size: {file_size} bytes ({file_size / (1024*1024):.2f} MB)"
+            f"Video file size: {file_size} bytes ({file_size / (1024 * 1024):.2f} MB)"
         )
 
         # Extract audio
@@ -443,6 +451,7 @@ def process_video(video_path: Union[str, Path], args: argparse.Namespace) -> boo
                     stderr=subprocess.PIPE,
                     text=True,
                     timeout=1800,  # 30 minute timeout for post-processing
+                    check=False,
                 )
 
                 if subprocess_result.returncode != 0:
@@ -452,13 +461,16 @@ def process_video(video_path: Union[str, Path], args: argparse.Namespace) -> boo
                         else "Unknown post-processing error"
                     )
                     logger.warning(
-                        f"Post-processing failed (code {subprocess_result.returncode}): {error_msg}"
+                        f"Post-processing failed "
+                        f"(code {subprocess_result.returncode}): "
+                        f"{error_msg}"
                     )
                 else:
                     logger.info("Post-processing completed successfully")
                     if subprocess_result.stdout.strip():
                         logger.debug(
-                            f"Post-processing output: {subprocess_result.stdout.strip()}"
+                            f"Post-processing output: "
+                            f"{subprocess_result.stdout.strip()}"
                         )
             except subprocess.TimeoutExpired:
                 logger.error("Post-processing timed out after 30 minutes")
@@ -473,7 +485,7 @@ def process_video(video_path: Union[str, Path], args: argparse.Namespace) -> boo
         return False
 
 
-def transcribe_audio(
+def transcribe_audio(  # pylint: disable=too-many-return-statements
     audio_path: Union[str, Path], args: argparse.Namespace
 ) -> Optional[WhisperResult]:
     """Transcribe audio using Whisper with comprehensive error handling and logging.
@@ -499,7 +511,7 @@ def transcribe_audio(
 
         file_size = audio_path_obj.stat().st_size
         logger.info(
-            f"Audio file size: {file_size} bytes ({file_size / (1024*1024):.2f} MB)"
+            f"Audio file size: {file_size} bytes ({file_size / (1024 * 1024):.2f} MB)"
         )
 
         # Load Whisper model
@@ -532,13 +544,12 @@ def transcribe_audio(
         try:
             # Try to load audio with numpy directly for better control
             try:
-                import numpy as np
-                import scipy.io.wavfile as wav
 
                 logger.debug("Loading audio with scipy for preprocessing...")
                 sample_rate, audio_data = wav.read(str(audio_path_obj))
                 logger.debug(
-                    f"Loaded audio: sample_rate={sample_rate}, shape={audio_data.shape}, dtype={audio_data.dtype}"
+                    f"Loaded audio: sample_rate={sample_rate}, "
+                    f"shape={audio_data.shape}, dtype={audio_data.dtype}"
                 )
 
                 # Convert to float32 and normalize
@@ -559,9 +570,8 @@ def transcribe_audio(
                 # Resample to 16kHz if needed
                 if sample_rate != 16000:
                     logger.info(f"Resampling audio from {sample_rate}Hz to 16kHz")
-                    from scipy import signal
 
-                    audio_data = signal.resample(
+                    audio_data = scipy.signal.resample(
                         audio_data, int(len(audio_data) * 16000 / sample_rate)
                     )
 
@@ -572,7 +582,8 @@ def transcribe_audio(
 
             except Exception as audio_error:
                 logger.warning(
-                    f"Error loading audio with scipy: {audio_error}. Falling back to whisper's audio loading"
+                    f"Error loading audio with scipy: {audio_error}. "
+                    "Falling back to whisper's audio loading"
                 )
 
                 # Fall back to whisper's default loading
@@ -587,7 +598,8 @@ def transcribe_audio(
                 segment_count = len(result["segments"])
                 detected_language = result.get("language", "unknown")
                 logger.info(
-                    f"Transcription successful: {segment_count} segments detected, language: {detected_language}"
+                    f"Transcription successful: {segment_count} segments detected, "
+                    f"language: {detected_language}"
                 )
 
                 # Log some basic statistics
@@ -600,9 +612,9 @@ def transcribe_audio(
                     )
 
                 return result  # type: ignore[no-any-return]
-            else:
-                logger.error("Transcription returned invalid result")
-                return None
+
+            logger.error("Transcription returned invalid result")
+            return None
 
         except KeyboardInterrupt:
             logger.warning("Transcription cancelled by user")
@@ -622,8 +634,6 @@ def cleanup_and_exit(exit_code: int = 0) -> None:
     Args:
         exit_code: Exit code to use when exiting the application.
     """
-    global TEMP_DIR
-
     logger.info(f"Application cleanup initiated with exit code: {exit_code}")
 
     if TEMP_DIR and os.path.exists(TEMP_DIR):
@@ -649,8 +659,10 @@ def cleanup_and_exit(exit_code: int = 0) -> None:
 
 
 def main() -> None:
+    """Main function that handles argument parsing and orchestrates video processing."""
     parser = argparse.ArgumentParser(
-        description="SubWhisper: Generate subtitles from video files using OpenAI's Whisper"
+        description="SubWhisper: Generate subtitles from video files "
+        "using OpenAI's Whisper"
     )
 
     # Input options
@@ -698,7 +710,8 @@ def main() -> None:
     post_group.add_argument(
         "--post-process",
         default=None,
-        help="Command to run on generated subtitle file (use INPUT_FILE as placeholder)",
+        help="Command to run on generated subtitle file "
+        "(use INPUT_FILE as placeholder)",
     )
 
     # Subtitle Edit CLI preset options
@@ -736,7 +749,8 @@ def main() -> None:
     if docker_cmd:
         if args.post_process:
             print(
-                "Warning: Both custom post-process command and presets specified. Using presets."
+                "Warning: Both custom post-process command and presets "
+                "specified. Using presets."
             )
         args.post_process = docker_cmd
 
@@ -755,7 +769,7 @@ def main() -> None:
 
         # Log system information for debugging
         try:
-            import torch
+            import torch  # pylint: disable=import-outside-toplevel
 
             logger.info(f"PyTorch version: {torch.__version__}")
             logger.info(f"CUDA available: {torch.cuda.is_available()}")
@@ -796,7 +810,8 @@ def main() -> None:
                 found_files_upper = glob.glob(pattern_upper, recursive=True)
                 video_files.extend(found_files_upper)
                 logger.debug(
-                    f"Found {len(found_files_upper)} files with extension .{ext.upper()}"
+                    f"Found {len(found_files_upper)} files with extension "
+                    f".{ext.upper()}"
                 )
 
             # Remove duplicates
@@ -807,7 +822,8 @@ def main() -> None:
                     f"No video files found with extensions: {args.extensions}"
                 )
                 print(
-                    f"SubWhisper: No video files found with extensions: {args.extensions}"
+                    f"SubWhisper: No video files found with extensions: "
+                    f"{args.extensions}"
                 )
                 return
 
@@ -821,25 +837,32 @@ def main() -> None:
 
             for i, video_file in enumerate(video_files):
                 logger.info(
-                    f"Processing batch file {i+1}/{len(video_files)}: {video_file}"
+                    f"Processing batch file {i + 1}/{len(video_files)}: {video_file}"
                 )
                 print(
-                    f"\nSubWhisper: Processing file {i+1}/{len(video_files)}: {video_file}"
+                    f"\nSubWhisper: Processing file {i+1}/{len(video_files)}: "
+                    f"{video_file}"
                 )
 
                 if process_video(video_file, args):
                     successful += 1
-                    logger.info(f"Successfully processed file {i+1}/{len(video_files)}")
+                    logger.info(
+                        f"Successfully processed file {i + 1}/{len(video_files)}"
+                    )
                 else:
                     failed += 1
-                    logger.error(f"Failed to process file {i+1}/{len(video_files)}")
+                    logger.error(
+                        f"Failed to process file {i + 1}/{len(video_files)}"
+                    )
 
             total_time = time.time() - start_time
             logger.info(
-                f"Batch processing complete: {successful} succeeded, {failed} failed in {total_time:.2f} seconds"
+                f"Batch processing complete: {successful} succeeded, "
+                f"{failed} failed in {total_time:.2f} seconds"
             )
             print(
-                f"\nSubWhisper: Batch processing complete: {successful} succeeded, {failed} failed"
+                f"\nSubWhisper: Batch processing complete: {successful} succeeded, "
+                f"{failed} failed"
             )
             print(f"Total processing time: {total_time:.2f} seconds")
 
@@ -853,16 +876,19 @@ def main() -> None:
 
             if success:
                 logger.info(
-                    f"Single video processing completed successfully in {processing_time:.2f} seconds"
+                    f"Single video processing completed successfully in "
+                    f"{processing_time:.2f} seconds"
                 )
                 print("\nSubWhisper: Processing complete!")
                 if not args.post_process:
                     print(
-                        "You can now open the SRT file in Subtitle Edit for any additional formatting or timing adjustments."
+                        "You can now open the SRT file in Subtitle Edit for any "
+                        "additional formatting or timing adjustments."
                     )
             else:
                 logger.error(
-                    f"Single video processing failed after {processing_time:.2f} seconds"
+                    f"Single video processing failed after "
+                    f"{processing_time:.2f} seconds"
                 )
                 print("\nSubWhisper: Processing failed. Check the logs for details.")
 
@@ -892,7 +918,10 @@ def generate_docker_post_process_cmd(args: argparse.Namespace) -> Optional[str]:
         return None
 
     # Start building Docker command
-    docker_cmd = 'docker run --rm -v "$(pwd)":/subtitles seconv:1.0 /subtitles/INPUT_FILE_BASENAME'
+    docker_cmd = (
+        'docker run --rm -v "$(pwd)":/subtitles seconv:1.0 '
+        '/subtitles/INPUT_FILE_BASENAME'
+    )
 
     # Set output format (default is subrip/srt)
     output_format = args.convert_to if args.convert_to else "subrip"
